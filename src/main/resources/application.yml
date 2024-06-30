@@ -1,0 +1,75 @@
+server:
+  port: 1000
+  error:
+    include-message: always
+    include-binding-errors: always
+
+oauth:
+  google:
+    clientId: ""
+    clientSecret: ""
+    scope: "openid profile email"
+
+spring:
+  application:
+    name: gateway
+  config:
+    import: optional:consul:/
+  cloud:
+    consul:
+      host: localhost
+      port: 8500
+      discovery:
+        health-check-path: /health
+    gateway:
+      routes:
+        - id: gateway-oauth-route
+          uri: lb://gateway
+          predicates:
+            - Path=/oauth/**
+        - id: service-customers-route
+          uri: lb://service-customers
+          predicates:
+            - Path=/api/customers/**
+          filters:
+            - RewritePath=/api/customers/(?<remaining>.*), /api/customers/${remaining}
+        - id: service-contracts-route
+          uri: lb://service-contracts
+          predicates:
+            - Path=/api/contracts/**
+          filters:
+            - RewritePath=/api/contracts/(?<remaining>.*), /api/contracts/${remaining}
+        - id: service-searcher-route
+          uri: lb://service-searcher
+          predicates:
+            - Path=/api/search/**
+          filters:
+            - RewritePath=/api/search/(?<remaining>.*), /api/${remaining}
+  r2dbc:
+    url: "r2dbc:h2:mem:///gwsdb"
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      services:
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 60
+        slow-call-duration-threshold:
+          - 2s
+        minimum-number-of-calls: 3
+        permitted-number-of-calls-in-half-open-state: 1
+
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      base-path: /
+      exposure:
+        include: "*"
