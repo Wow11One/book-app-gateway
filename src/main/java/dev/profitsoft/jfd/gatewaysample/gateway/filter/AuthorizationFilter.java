@@ -38,5 +38,4 @@ public class AuthorizationFilter implements GlobalFilter, Ordered {
     return -5;
   }
 
-
 }

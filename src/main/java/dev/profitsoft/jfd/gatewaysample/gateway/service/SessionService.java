@@ -13,7 +13,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.time.Instant;
 
-import static dev.profitsoft.jfd.gatewaysample.gateway.filter.AuthenticationFilter.COOKIE_SESSION_ID;
+import static dev.profitsoft.jfd.gatewaysample.gateway.filter.AuthenticationService.COOKIE_SESSION_ID;
 
 @Service
 @RequiredArgsConstructor

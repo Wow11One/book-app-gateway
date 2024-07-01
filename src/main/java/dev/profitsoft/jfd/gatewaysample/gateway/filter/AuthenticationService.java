@@ -7,11 +7,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -20,12 +21,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Slf4j
-@Component
+@Service
 @RequiredArgsConstructor
-public class AuthenticationFilter implements GlobalFilter, Ordered {
+public class AuthenticationService{
 
   private static final String PREFIX_OAUTH = "/oauth";
-  private static final String ENDPOINT_AUTHENTICATE = PREFIX_OAUTH + "/authenticate";
+  private static final String ENDPOINT_GOOGLE_AUTHENTICATE = PREFIX_OAUTH + "/google/authenticate";
   private static final String ENDPOINT_CALLBACK = PREFIX_OAUTH + "/callback";
   public static final String COOKIE_AUTH_STATE = "auth-state";
   public static final String COOKIE_SESSION_ID = "SESSION-ID";
@@ -34,19 +35,7 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
   private final SessionService sessionService;
 
-  @Override
-  public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-    ServerHttpRequest request = exchange.getRequest();
-    switch (request.getPath().value()) {
-      case ENDPOINT_AUTHENTICATE:
-        return authenticate(exchange);
-      case ENDPOINT_CALLBACK:
-        return authCallback(exchange);
-    }
-    return chain.filter(exchange);
-  }
-
-  private Mono<Void> authenticate(ServerWebExchange exchange) {
+  public Mono<Void> authenticate(ServerWebExchange exchange) {
     String state = UUID.randomUUID().toString();
     addStateCookie(exchange, state);
     String redirectUri = buildRedirectUri(exchange.getRequest());
@@ -63,7 +52,7 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
         .doOnNext(userInfo -> log.info("User authenticated: {}", userInfo))
         .flatMap(sessionService::saveSession)
         .flatMap(session -> sessionService.addSessionCookie(exchange, session))
-        .then(sendRedirect(exchange, "/api/profile")));
+        .then(sendRedirect(exchange, "http://localhost:3050")));
   }
 
   private Mono<Void> verifyState(String state, ServerHttpRequest request) {
@@ -99,8 +88,4 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
     return request.getURI().toString().substring(0, request.getURI().toString().indexOf(PREFIX_OAUTH));
   }
 
-  @Override
-  public int getOrder() {
-    return -10;
-  }
 }
