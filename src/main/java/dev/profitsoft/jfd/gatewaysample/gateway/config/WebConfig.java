@@ -15,17 +15,4 @@ public class WebConfig implements WebFluxConfigurer {
     // Emulate SessionCreationPolicy.STATELESS
     return exchange -> Mono.empty();
   }
-
-  @Override
-  public void addCorsMappings(CorsRegistry registry) {
-    registry.addMapping("/**")
-      .allowedMethods(
-        "POST",
-        "GET",
-        "PUT",
-        "DELETE",
-        "OPTIONS"
-      );
-  }
-
 }

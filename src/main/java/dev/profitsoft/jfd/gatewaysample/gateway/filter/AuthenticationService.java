@@ -1,13 +1,10 @@
 package dev.profitsoft.jfd.gatewaysample.gateway.filter;
 
 import dev.profitsoft.jfd.gatewaysample.gateway.auth.GoogleAuthenticationService;
+import dev.profitsoft.jfd.gatewaysample.gateway.auth.dto.GoogleOauthAuthenticationAddress;
 import dev.profitsoft.jfd.gatewaysample.gateway.service.SessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cloud.gateway.filter.GatewayFilterChain;
-import org.springframework.cloud.gateway.filter.GlobalFilter;
-import org.springframework.core.Ordered;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -26,8 +23,7 @@ import java.util.UUID;
 public class AuthenticationService{
 
   private static final String PREFIX_OAUTH = "/oauth";
-  private static final String ENDPOINT_GOOGLE_AUTHENTICATE = PREFIX_OAUTH + "/google/authenticate";
-  private static final String ENDPOINT_CALLBACK = PREFIX_OAUTH + "/callback";
+  private static final String ENDPOINT_CALLBACK = PREFIX_OAUTH + "/google/callback";
   public static final String COOKIE_AUTH_STATE = "auth-state";
   public static final String COOKIE_SESSION_ID = "SESSION-ID";
 
@@ -35,32 +31,24 @@ public class AuthenticationService{
 
   private final SessionService sessionService;
 
-  public Mono<Void> authenticate(ServerWebExchange exchange) {
+  public Mono<GoogleOauthAuthenticationAddress> authenticate(ServerWebExchange exchange) {
     String state = UUID.randomUUID().toString();
     addStateCookie(exchange, state);
     String redirectUri = buildRedirectUri(exchange.getRequest());
     String authenticationUrl = googleAuthenticationService.generateAuthenticationUrl(redirectUri, state);
-    return sendRedirect(exchange, authenticationUrl);
+
+    return Mono.just(GoogleOauthAuthenticationAddress.builder().address(authenticationUrl).build());
   }
 
-  private Mono<Void> authCallback(ServerWebExchange exchange) {
+  public Mono<Void> authCallback(ServerWebExchange exchange) {
     String code = exchange.getRequest().getQueryParams().getFirst("code");
-    String state = exchange.getRequest().getQueryParams().getFirst("state");
     String redirectUri = buildRedirectUri(exchange.getRequest());
-    return verifyState(state, exchange.getRequest())
-        .then(googleAuthenticationService.processAuthenticationCallback(code, redirectUri)
-        .doOnNext(userInfo -> log.info("User authenticated: {}", userInfo))
-        .flatMap(sessionService::saveSession)
-        .flatMap(session -> sessionService.addSessionCookie(exchange, session))
-        .then(sendRedirect(exchange, "http://localhost:3050")));
-  }
-
-  private Mono<Void> verifyState(String state, ServerHttpRequest request) {
-    String cookieState = request.getCookies().getFirst(COOKIE_AUTH_STATE).getValue();
-    if (!state.equals(cookieState)) {
-      return Mono.error(new IllegalStateException("Invalid state"));
-    }
-    return Mono.empty();
+    return googleAuthenticationService.processAuthenticationCallback(code, redirectUri)
+      .doOnNext(userInfo -> log.info("User authenticated: {}", userInfo))
+      .flatMap(sessionService::saveSession)
+      .flatMap(session -> sessionService.addSessionCookie(exchange, session))
+      .doOnError(error -> log.error("error occurred while parsing session id code: {}", error.getMessage()))
+      .then(sendRedirect(exchange, "http://localhost:3050"));
   }
 
   private static void addStateCookie(ServerWebExchange exchange, String state) {
@@ -68,7 +56,6 @@ public class AuthenticationService{
         .value(state)
         .path(PREFIX_OAUTH)
         .maxAge(Duration.of(30, ChronoUnit.MINUTES))
-        .secure(true)
         .build());
   }
 
